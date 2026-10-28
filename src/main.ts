@@ -1,4 +1,4 @@
-import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, SettingDefinitionItem, WorkspaceLeaf } from "obsidian";
 import { QuakeView, VIEW_TYPE_QUAKE } from "./QuakeView";
 
 interface QuakeSettings {
@@ -24,22 +24,22 @@ export default class QuakePlugin extends Plugin {
 
 		this.registerView(VIEW_TYPE_QUAKE, (leaf) => new QuakeView(leaf, this));
 
-		this.addRibbonIcon("skull", "Play Quake", () => this.openQuake());
+		this.addRibbonIcon("skull", "Play Quake", () => void this.openQuake());
 
 		this.addCommand({
 			id: "open",
 			name: "Play in a new tab",
-			callback: () => this.openQuake(),
+			callback: () => void this.openQuake(),
 		});
 		this.addCommand({
 			id: "open-window",
 			name: "Play in a new window",
-			callback: () => this.openQuake("", "window"),
+			callback: () => void this.openQuake("", "window"),
 		});
 		this.addCommand({
 			id: "import-paks",
 			name: "Import pak files",
-			callback: () => this.importPakFiles(),
+			callback: () => void this.importPakFiles(),
 		});
 
 		// ```quake
@@ -48,9 +48,7 @@ export default class QuakePlugin extends Plugin {
 		this.registerMarkdownCodeBlockProcessor("quake", (source, el) => {
 			const args = source.trim().replace(/\s+/g, " ");
 			const box = el.createDiv({ cls: "quake-launcher" });
-			box.createEl("button", { text: "Play Quake", cls: "mod-cta" }).addEventListener("click", () =>
-				this.openQuake(args)
-			);
+			box.createEl("button", { text: "Play Quake", cls: "mod-cta" }).addEventListener("click", () => void this.openQuake(args));
 			if (args) box.createSpan({ cls: "quake-launcher-args", text: args });
 		});
 
@@ -60,46 +58,45 @@ export default class QuakePlugin extends Plugin {
 	async openQuake(args = "", where: "tab" | "window" = "tab"): Promise<void> {
 		const leaf: WorkspaceLeaf = this.app.workspace.getLeaf(where);
 		await leaf.setViewState({ type: VIEW_TYPE_QUAKE, active: true, state: { args } });
-		this.app.workspace.revealLeaf(leaf);
-		(leaf.view as QuakeView).focusGame?.();
+		await this.app.workspace.revealLeaf(leaf);
+		if (leaf.view instanceof QuakeView) leaf.view.focusGame();
 	}
 
 	/** Lets the user pick .pak files from disk and copies them into <folder>/id1. */
 	importPakFiles(): Promise<boolean> {
 		return new Promise((resolve) => {
-			const input = document.createElement("input");
-			input.type = "file";
-			input.multiple = true;
-			input.accept = ".pak,.PAK";
-			input.addEventListener("change", async () => {
-				const picked = Array.from(input.files ?? []);
-				if (picked.length === 0) return resolve(false);
-				const adapter = this.app.vault.adapter;
-				const dir = normalizePath(`${this.settings.folder}/id1`);
-				try {
-					if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
-					for (const file of picked) {
-						const name = file.name.toLowerCase();
-						if (!/^pak\d+\.pak$/.test(name)) {
-							new Notice(`Quake: skipped ${file.name} (expected pak0.pak, pak1.pak…)`);
-							continue;
-						}
-						await adapter.writeBinary(`${dir}/${name}`, await file.arrayBuffer());
-						new Notice(`Quake: imported ${name}`);
-					}
-					resolve(true);
-				} catch (e) {
-					console.error("Quake: import failed", e);
-					new Notice("Quake: import failed, see the developer console.");
-					resolve(false);
-				}
-			});
+			const input = createEl("input", { type: "file", attr: { multiple: true, accept: ".pak,.PAK" } });
+			input.addEventListener("change", () => void this.copyPakFiles(Array.from(input.files ?? [])).then(resolve));
 			input.click();
 		});
 	}
 
+	private async copyPakFiles(picked: File[]): Promise<boolean> {
+		if (picked.length === 0) return false;
+		const adapter = this.app.vault.adapter;
+		const dir = normalizePath(`${this.settings.folder}/id1`);
+		try {
+			if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
+			for (const file of picked) {
+				const name = file.name.toLowerCase();
+				if (!/^pak\d+\.pak$/.test(name)) {
+					new Notice(`Quake: skipped ${file.name} (expected pak0.pak, pak1.pak…)`);
+					continue;
+				}
+				await adapter.writeBinary(`${dir}/${name}`, await file.arrayBuffer());
+				new Notice(`Quake: imported ${name}`);
+			}
+			return true;
+		} catch (e) {
+			console.error("Quake: import failed", e);
+			new Notice("Quake: import failed, see the developer console.");
+			return false;
+		}
+	}
+
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const saved = (await this.loadData()) as Partial<QuakeSettings> | null;
+		this.settings = { ...DEFAULT_SETTINGS, ...saved };
 	}
 
 	async saveSettings(): Promise<void> {
@@ -107,51 +104,68 @@ export default class QuakePlugin extends Plugin {
 	}
 }
 
+const FOLDER_DESC = "Vault folder with the game data. It must contain id1/pak0.pak. Saves and config.cfg are written here too.";
+const ARGS_DESC = 'Extra arguments, as in the original game. Examples: "-game mymod", "-hipnotic", "+map e1m1", "-nosound".';
+const IMPORT_DESC = "Copy pak0.pak / pak1.pak from your Quake install into the Quake folder.";
+const DEBUG_DESC = "Print engine messages to the developer console.";
+
 class QuakeSettingTab extends PluginSettingTab {
 	constructor(app: App, private plugin: QuakePlugin) {
 		super(app, plugin);
 	}
 
+	// Obsidian 1.13+: settings rendered by Obsidian and included in settings search.
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{ name: "Quake folder", desc: FOLDER_DESC, control: { type: "folder", key: "folder", placeholder: "Quake" } },
+			{ name: "Command line", desc: ARGS_DESC, control: { type: "text", key: "args" } },
+			{ name: "Import pak files", desc: IMPORT_DESC, action: () => void this.plugin.importPakFiles() },
+			{ name: "Debug log", desc: DEBUG_DESC, control: { type: "toggle", key: "debug" } },
+		];
+	}
+
+	getControlValue(key: string): unknown {
+		return this.plugin.settings[key as keyof QuakeSettings];
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		const settings = this.plugin.settings;
+		if (key === "folder") settings.folder = normalizePath((typeof value === "string" ? value : "").trim() || "Quake");
+		else if (key === "args") settings.args = typeof value === "string" ? value : "";
+		else if (key === "debug") settings.debug = value === true;
+		await this.plugin.saveSettings();
+	}
+
+	// Older Obsidian versions.
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
 		new Setting(containerEl)
 			.setName("Quake folder")
-			.setDesc("Vault folder with the game data. It must contain id1/pak0.pak. Saves and config.cfg are written here too.")
+			.setDesc(FOLDER_DESC)
 			.addText((text) =>
 				text
 					.setPlaceholder("Quake")
 					.setValue(this.plugin.settings.folder)
-					.onChange(async (value) => {
-						this.plugin.settings.folder = normalizePath(value.trim() || "Quake");
-						await this.plugin.saveSettings();
-					})
+					.onChange((value) => void this.setControlValue("folder", value))
 			);
 
 		new Setting(containerEl)
 			.setName("Command line")
-			.setDesc('Extra arguments, as in the original game. Examples: "-game mymod", "-hipnotic", "+map e1m1", "-nosound".')
-			.addText((text) =>
-				text.setValue(this.plugin.settings.args).onChange(async (value) => {
-					this.plugin.settings.args = value;
-					await this.plugin.saveSettings();
-				})
-			);
+			.setDesc(ARGS_DESC)
+			.addText((text) => text.setValue(this.plugin.settings.args).onChange((value) => void this.setControlValue("args", value)));
 
 		new Setting(containerEl)
 			.setName("Import pak files")
-			.setDesc("Copy pak0.pak / pak1.pak from your Quake install into the Quake folder.")
-			.addButton((button) => button.setButtonText("Import…").onClick(() => this.plugin.importPakFiles()));
+			.setDesc(IMPORT_DESC)
+			.addButton((button) => button.setButtonText("Import…").onClick(() => void this.plugin.importPakFiles()));
 
 		new Setting(containerEl)
 			.setName("Debug log")
-			.setDesc("Print engine messages to the developer console.")
+			.setDesc(DEBUG_DESC)
 			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.settings.debug).onChange(async (value) => {
-					this.plugin.settings.debug = value;
-					await this.plugin.saveSettings();
-				})
+				toggle.setValue(this.plugin.settings.debug).onChange((value) => void this.setControlValue("debug", value))
 			);
 	}
 }

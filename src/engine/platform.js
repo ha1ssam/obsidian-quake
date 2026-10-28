@@ -1,18 +1,48 @@
 // Obsidian platform layer for WebQuake.
 // Runs inside the game iframe, after the engine scripts. It replaces the parts
 // of the engine that expect a web server (XHR file loading, the URL as command
-// line, alert() on errors) with calls to `window.QuakeBridge`, which the plugin
-// sets up before injecting the engine.
+// line, alert() on errors) with calls to a bridge object that the plugin passes
+// to window.QuakeStart().
 (function ()
 {
-	var bridge = window.QuakeBridge;
-	var files = bridge.files; // lowercase path relative to the Quake folder -> ArrayBuffer
+	var bridge = null;
+	var files = {}; // lowercase path relative to the Quake folder -> ArrayBuffer
 
 	var startEngine = window.onload;
 	window.onload = null;
 
-	if (bridge.debug !== true)
-		Sys.Print = function() {};
+	var print = Sys.Print;
+	Sys.Print = function(text)
+	{
+		if ((bridge != null) && (bridge.debug === true))
+			print(text);
+	};
+
+	// In-memory replacement for the browser's web storage (the build points the
+	// engine at QuakeStorage). It is filled from the vault at start, and every
+	// change is mirrored back into the vault.
+	var store = {};
+	window.QuakeStorage = {
+		getItem: function(key)
+		{
+			return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+		},
+		setItem: function(key, value)
+		{
+			store[key] = String(value);
+		},
+		removeItem: function(key)
+		{
+			if (!Object.prototype.hasOwnProperty.call(store, key))
+				return;
+			delete store[key];
+			if (key.indexOf('Quake.') === 0)
+			{
+				delete files[key.substring(6)];
+				bridge.remove(key.substring(6));
+			}
+		}
+	};
 
 	// Never block closing Obsidian with a "leave page?" prompt.
 	Sys.events = Sys.events.filter(function(name) {return name !== 'onbeforeunload';});
@@ -88,7 +118,7 @@
 		{
 			search = COM.searchpaths[i];
 			netpath = search.filename + '/' + filename;
-			data = localStorage.getItem('Quake.' + netpath);
+			data = QuakeStorage.getItem('Quake.' + netpath);
 			if (data != null)
 			{
 				Draw.EndDisc();
@@ -117,7 +147,7 @@
 		Draw.EndDisc();
 	};
 
-	// Writes still go to localStorage (the save menu reads from there), and are
+	// Writes still go to QuakeStorage (the save menu reads from there), and are
 	// mirrored into the vault so they survive restarts and stay with the vault.
 	function gamePath(filename)
 	{
@@ -224,8 +254,22 @@
 		try {Host.Shutdown();} catch (e) {}
 	};
 
-	window.QuakeStart = function()
+	window.QuakeStart = function(b)
 	{
+		bridge = b;
+		files = b.files;
+		// Saves found in the vault go into the store so the menu can delete them.
+		var path, bytes, i, text;
+		for (path in files)
+		{
+			if (!/\.sav$/.test(path))
+				continue;
+			bytes = new Uint8Array(files[path]);
+			text = [];
+			for (i = 0; i < bytes.length; ++i)
+				text[i] = String.fromCharCode(bytes[i]);
+			store['Quake.' + path] = text.join('');
+		}
 		startEngine();
 	};
 })();

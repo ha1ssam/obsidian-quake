@@ -1,8 +1,7 @@
 import { ItemView, Notice, ViewStateResult, WorkspaceLeaf } from "obsidian";
-import engineCode from "virtual:quake-engine";
 import frameHtml from "virtual:quake-frame";
 import type QuakePlugin from "./main";
-import { hasBaseGame, loadGameFiles, writeGameFile } from "./gameFiles";
+import { GameFiles, hasBaseGame, loadGameFiles, removeGameFile, writeGameFile } from "./gameFiles";
 
 export const VIEW_TYPE_QUAKE = "quake-view";
 
@@ -10,10 +9,24 @@ interface QuakeViewState {
 	args?: string;
 }
 
+/** What the engine (src/engine/platform.js) gets from the plugin. */
+interface QuakeBridge {
+	files: GameFiles;
+	args: string[];
+	debug: boolean;
+	write(path: string, data: string | Uint8Array): void;
+	remove(path: string): void;
+	quit(): void;
+	error(text: string): void;
+}
+
 interface QuakeWindow extends Window {
-	QuakeBridge?: unknown;
-	QuakeStart?: () => void;
+	QuakeStart?: (bridge: QuakeBridge) => void;
 	QuakeShutdown?: () => void;
+}
+
+function gameWindow(frame: HTMLIFrameElement): QuakeWindow | null {
+	return frame.contentWindow;
 }
 
 /** Splits a Quake command line, keeping "quoted strings" together. */
@@ -67,7 +80,7 @@ export class QuakeView extends ItemView {
 		// setState() runs right after this when the tab is opened with arguments;
 		// only start here if it did not.
 		window.setTimeout(() => {
-			if (!this.running) this.start();
+			if (!this.running) void this.start();
 		}, 0);
 	}
 
@@ -83,12 +96,14 @@ export class QuakeView extends ItemView {
 		this.ended = false;
 		const { contentEl } = this;
 		contentEl.empty();
+		contentEl.addClass("quake-view-message");
 		const loading = contentEl.createDiv({ cls: "quake-message", text: "Loading Quake data files…" });
 
 		const folder = this.plugin.settings.folder;
 		const files = await loadGameFiles(this.app.vault.adapter, folder);
 		if (generation !== this.generation) return;
 		loading.remove();
+		contentEl.removeClass("quake-view-message");
 
 		if (!hasBaseGame(files)) {
 			this.showSetup();
@@ -100,20 +115,14 @@ export class QuakeView extends ItemView {
 		frame.setAttribute("allow", "fullscreen; autoplay");
 		this.frame = frame;
 
-		// Clear saves left in localStorage by another vault: the vault is the source of truth.
-		for (let i = window.localStorage.length - 1; i >= 0; --i) {
-			const key = window.localStorage.key(i);
-			if (key?.startsWith("Quake.")) window.localStorage.removeItem(key);
-		}
-
 		frame.addEventListener(
 			"load",
 			() => {
-				const win = frame.contentWindow as QuakeWindow | null;
+				const win = gameWindow(frame);
 				const doc = frame.contentDocument;
 				if (!win || !doc || this.frame !== frame) return;
 
-				win.QuakeBridge = {
+				const bridge: QuakeBridge = {
 					files,
 					args,
 					debug: this.plugin.settings.debug,
@@ -121,6 +130,12 @@ export class QuakeView extends ItemView {
 						writeGameFile(this.app.vault.adapter, folder, path, data).catch((e) => {
 							console.error("Quake: could not save", path, e);
 							new Notice(`Quake: could not save ${path}`);
+						});
+					},
+					remove: (path: string) => {
+						removeGameFile(this.app.vault.adapter, folder, path).catch((e) => {
+							console.error("Quake: could not delete", path, e);
+							new Notice(`Quake: could not delete ${path}`);
 						});
 					},
 					quit: () => {
@@ -133,17 +148,14 @@ export class QuakeView extends ItemView {
 					},
 				};
 
-				const script = doc.createElement("script");
-				script.textContent = engineCode;
-				doc.body.appendChild(script);
-
 				try {
-					win.QuakeStart?.();
+					if (!win.QuakeStart) throw new Error("The game engine did not load.");
+					win.QuakeStart(bridge);
 				} catch (e) {
 					// Sys.Error/Sys.Quit throw after reporting through the bridge.
 					if (!this.ended) {
 						console.error("Quake:", e);
-						this.showError(String((e as Error)?.message ?? e));
+						this.showError(e instanceof Error ? e.message : String(e));
 					}
 					return;
 				}
@@ -164,7 +176,7 @@ export class QuakeView extends ItemView {
 		this.generation++;
 		if (!this.frame) return;
 		try {
-			(this.frame.contentWindow as QuakeWindow | null)?.QuakeShutdown?.();
+			gameWindow(this.frame)?.QuakeShutdown?.();
 		} catch (e) {
 			console.error("Quake: error while shutting down", e);
 		}
@@ -175,6 +187,7 @@ export class QuakeView extends ItemView {
 	private showSetup(): void {
 		const { contentEl } = this;
 		contentEl.empty();
+		contentEl.addClass("quake-view-message");
 		const box = contentEl.createDiv({ cls: "quake-message" });
 		const folder = this.plugin.settings.folder;
 		box.createEl("h2", { text: "Quake data files not found" });
@@ -191,20 +204,23 @@ export class QuakeView extends ItemView {
 
 		const buttons = box.createDiv({ cls: "quake-buttons" });
 		const importBtn = buttons.createEl("button", { text: "Import pak files…", cls: "mod-cta" });
-		importBtn.addEventListener("click", async () => {
-			if (await this.plugin.importPakFiles()) await this.start();
+		importBtn.addEventListener("click", () => {
+			void this.plugin.importPakFiles().then((imported) => {
+				if (imported) void this.start();
+			});
 		});
-		buttons.createEl("button", { text: "Try again" }).addEventListener("click", () => this.start());
+		buttons.createEl("button", { text: "Try again" }).addEventListener("click", () => void this.start());
 	}
 
 	private showError(text: string): void {
 		this.stop();
 		const { contentEl } = this;
 		contentEl.empty();
+		contentEl.addClass("quake-view-message");
 		const box = contentEl.createDiv({ cls: "quake-message" });
 		box.createEl("h2", { text: "Quake stopped with an error" });
 		box.createEl("p", { text, cls: "quake-error" });
 		const buttons = box.createDiv({ cls: "quake-buttons" });
-		buttons.createEl("button", { text: "Restart", cls: "mod-cta" }).addEventListener("click", () => this.start());
+		buttons.createEl("button", { text: "Restart", cls: "mod-cta" }).addEventListener("click", () => void this.start());
 	}
 }

@@ -41,6 +41,12 @@ export async function writeGameFile(
 	}
 }
 
+/** Deletes a file removed by the game (e.g. a save deleted from the load menu). */
+export async function removeGameFile(adapter: DataAdapter, folder: string, relPath: string): Promise<void> {
+	const path = normalizePath(`${folder}/${relPath}`);
+	if (await adapter.exists(path)) await adapter.remove(path);
+}
+
 /** True when the folder has the minimum data needed to start the game. */
 export function hasBaseGame(files: GameFiles): boolean {
 	return "id1/pak0.pak" in files;
