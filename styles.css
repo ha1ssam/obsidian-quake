@@ -1,0 +1,57 @@
+.quake-view {
+	padding: 0 !important;
+	overflow: hidden !important;
+	background-color: #000;
+	position: relative;
+}
+
+.quake-frame {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border: none;
+}
+
+.quake-message {
+	max-width: 560px;
+	margin: 0 auto;
+	padding: var(--size-4-8) var(--size-4-4);
+	color: var(--text-normal);
+	background-color: var(--background-primary);
+}
+
+.quake-view:has(.quake-message) {
+	background-color: var(--background-primary);
+}
+
+.quake-message code {
+	user-select: text;
+}
+
+.quake-message .quake-error {
+	color: var(--text-error);
+	white-space: pre-wrap;
+	user-select: text;
+}
+
+.quake-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-4);
+}
+
+.quake-launcher {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.quake-launcher-args {
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+}

@@ -1,0 +1,23 @@
+{
+	"name": "obsidian-quake",
+	"version": "1.0.0",
+	"description": "Play Quake 1 inside Obsidian.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production"
+	},
+	"keywords": [
+		"obsidian",
+		"quake",
+		"game"
+	],
+	"license": "(MIT AND GPL-2.0-or-later)",
+	"devDependencies": {
+		"@types/node": "^22.20.5",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "^0.25.12",
+		"obsidian": "^1.14.4",
+		"typescript": "^5.9.3"
+	}
+}
