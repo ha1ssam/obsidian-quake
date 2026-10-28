@@ -1,7 +1,7 @@
 {
 	"id": "quake",
 	"name": "Quake",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"minAppVersion": "1.7.2",
 	"description": "Play Quake 1 in a tab, using the game data files from your vault.",
 	"author": "Haissam Makki",
