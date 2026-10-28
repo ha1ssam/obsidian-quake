@@ -1,5 +1,6 @@
 import { App, normalizePath, Notice, Plugin, PluginSettingTab, Setting, SettingDefinitionItem, WorkspaceLeaf } from "obsidian";
 import { QuakeView, VIEW_TYPE_QUAKE } from "./QuakeView";
+import { pakTargetName } from "./gameFiles";
 
 interface QuakeSettings {
 	/** Vault folder that holds id1/ (and any mod folders). */
@@ -78,8 +79,8 @@ export default class QuakePlugin extends Plugin {
 		try {
 			if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
 			for (const file of picked) {
-				const name = file.name.toLowerCase();
-				if (!/^pak\d+\.pak$/.test(name)) {
+				const name = pakTargetName(file.name);
+				if (!name) {
 					new Notice(`Quake: skipped ${file.name} (expected pak0.pak, pak1.pak…)`);
 					continue;
 				}
