@@ -30,6 +30,8 @@ Ou use o comando **Quake: Import pak files** (ou o botão na tela do jogo) para 
 
 Nomes de arquivos são tratados sem diferenciar maiúsculas de minúsculas (`PAK0.PAK` funciona).
 
+Funciona o `pak0.pak` das versões 1.00, 1.01 e 1.06 do Quake, shareware ou completa.
+
 ## Como jogar
 
 - Clique no ícone de caveira na barra lateral, ou use os comandos **Quake: Play in a new tab** / **Play in a new window**.

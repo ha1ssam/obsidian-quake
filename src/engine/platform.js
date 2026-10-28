@@ -44,6 +44,17 @@
 		}
 	};
 
+	// Sounds are restarted all the time (pause, then play again); the browser
+	// rejects the pending play() promise when that happens, which is expected.
+	var play = HTMLMediaElement.prototype.play;
+	HTMLMediaElement.prototype.play = function()
+	{
+		var result = play.apply(this, arguments);
+		if ((result != null) && (typeof result.catch === 'function'))
+			result.catch(function() {});
+		return result;
+	};
+
 	// Never block closing Obsidian with a "leave page?" prompt.
 	Sys.events = Sys.events.filter(function(name) {return name !== 'onbeforeunload';});
 
@@ -92,7 +103,10 @@
 		if (numpackfiles !== 0)
 		{
 			var info = buf.slice(dirofs, dirofs + dirlen);
-			if (CRC.Block(new Uint8Array(info)) !== 32981)
+			// Directory CRCs of the official pak0.pak in Quake 1.06, 1.01 and
+			// 1.00 (WebQuake only knew 1.06, so older shareware copies were
+			// rejected as "modified"; QuakeSpasm accepts the same three).
+			if ([32981, 62751, 61986].indexOf(CRC.Block(new Uint8Array(info))) < 0)
 				COM.modified = true;
 			var view = new DataView(info), i;
 			for (i = 0; i < numpackfiles; ++i)
