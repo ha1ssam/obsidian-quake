@@ -26,6 +26,8 @@ Quake/
   hipnotic/ rogue/ <mod>/   ← opcional: expansões e mods
 ```
 
+Também funciona com os `.pak` soltos direto em `Quake/`. Se o plugin não achar o jogo, a tela inicial lista os `.pak` que existirem em outro lugar do cofre, com um botão para movê-los para o lugar certo.
+
 Ou use o comando **Quake: Import pak files** (ou o botão na tela do jogo) para copiar os `.pak` a partir do seu computador.
 
 Nomes de arquivos são tratados sem diferenciar maiúsculas de minúsculas (`PAK0.PAK` funciona).

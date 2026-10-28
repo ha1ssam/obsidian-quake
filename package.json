@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-quake",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "Play Quake 1 inside Obsidian.",
 	"main": "main.js",
 	"scripts": {

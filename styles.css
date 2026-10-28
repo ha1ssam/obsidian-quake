@@ -56,3 +56,16 @@
 	font-family: var(--font-monospace);
 	font-size: var(--font-ui-small);
 }
+
+.quake-found {
+	margin-top: var(--size-4-6);
+}
+
+.quake-found li {
+	margin-bottom: var(--size-4-2);
+}
+
+.quake-found code {
+	user-select: text;
+	word-break: break-all;
+}

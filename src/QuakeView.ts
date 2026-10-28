@@ -1,7 +1,7 @@
-import { ItemView, Notice, ViewStateResult, WorkspaceLeaf } from "obsidian";
+import { ItemView, normalizePath, Notice, TFile, ViewStateResult, WorkspaceLeaf } from "obsidian";
 import frameHtml from "virtual:quake-frame";
 import type QuakePlugin from "./main";
-import { GameFiles, hasBaseGame, loadGameFiles, removeGameFile, writeGameFile } from "./gameFiles";
+import { GameFiles, hasBaseGame, loadGameFiles, pakTargetName, removeGameFile, writeGameFile } from "./gameFiles";
 
 export const VIEW_TYPE_QUAKE = "quake-view";
 
@@ -210,6 +210,41 @@ export class QuakeView extends ItemView {
 			});
 		});
 		buttons.createEl("button", { text: "Try again" }).addEventListener("click", () => void this.start());
+
+		// Pak files that are somewhere else in the vault.
+		const found = this.app.vault.getFiles().filter((f) => f.extension.toLowerCase() === "pak");
+		if (found.length === 0) return;
+		const section = box.createDiv({ cls: "quake-found" });
+		section.createEl("h3", { text: "Pak files found elsewhere in this vault" });
+		const list = section.createEl("ul");
+		for (const file of found) {
+			const item = list.createEl("li");
+			item.createEl("code", { text: file.path });
+			const target = pakTargetName(file.name);
+			if (!target) continue;
+			const dest = normalizePath(`${folder}/id1/${target}`);
+			if (dest === file.path) continue;
+			item.appendText(" ");
+			item.createEl("button", { text: `Move to ${dest}` }).addEventListener("click", () => {
+				void this.movePak(file, dest);
+			});
+		}
+	}
+
+	private async movePak(file: TFile, dest: string): Promise<void> {
+		try {
+			if (this.app.vault.getAbstractFileByPath(dest)) {
+				new Notice(`Quake: ${dest} already exists`);
+				return;
+			}
+			const dir = dest.slice(0, dest.lastIndexOf("/"));
+			if (!this.app.vault.getAbstractFileByPath(dir)) await this.app.vault.createFolder(dir);
+			await this.app.fileManager.renameFile(file, dest);
+			await this.start();
+		} catch (e) {
+			console.error("Quake: could not move", file.path, e);
+			new Notice(`Quake: could not move ${file.path}`);
+		}
 	}
 
 	private showError(text: string): void {
