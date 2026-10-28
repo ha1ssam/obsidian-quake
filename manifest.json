@@ -1,9 +1,9 @@
 {
 	"id": "quake",
 	"name": "Quake",
-	"version": "1.0.0",
-	"minAppVersion": "1.4.0",
-	"description": "Play Quake 1 inside Obsidian, using the game data files from your vault.",
+	"version": "1.0.1",
+	"minAppVersion": "1.7.2",
+	"description": "Play Quake 1 in a tab, using the game data files from your vault.",
 	"author": "Haissam Makki",
 	"isDesktopOnly": true
 }

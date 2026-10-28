@@ -1,6 +1,6 @@
-.quake-view {
-	padding: 0 !important;
-	overflow: hidden !important;
+.workspace-leaf-content[data-type="quake-view"] > .view-content.quake-view {
+	padding: 0;
+	overflow: hidden;
 	background-color: #000;
 	position: relative;
 }
@@ -20,8 +20,9 @@
 	background-color: var(--background-primary);
 }
 
-.quake-view:has(.quake-message) {
+.workspace-leaf-content[data-type="quake-view"] > .view-content.quake-view-message {
 	background-color: var(--background-primary);
+	overflow: auto;
 }
 
 .quake-message code {
